@@ -1,139 +1,114 @@
-#Credits: Vivek Bhargav, Source https://gomchikbhokablog.wordpress.com/2013/08/13/proxy-settings-in-ubuntu/
-#Slight Modifications
+# proxychains.conf  VER 4
+#
+#        HTTP, SOCKS4, SOCKS5 tunneling proxifier with DNS.
+#	
 
-import sys
-import re
-import fileinput
-import os
+# The option below identifies how the ProxyList is treated.
+# only one option should be uncommented at time,
+# otherwise the last appearing option will be accepted
+#
+#dynamic_chain
+#
+# Dynamic - Each connection will be done via chained proxies
+# all proxies chained in the order as they appear in the list
+# at least one proxy must be online to play in chain
+# (dead proxies are skipped)
+# otherwise EINTR is returned to the app
+#
+strict_chain
+#
+# Strict - Each connection will be done via chained proxies
+# all proxies chained in the order as they appear in the list
+# all proxies must be online to play in chain
+# otherwise EINTR is returned to the app
+#
+#random_chain
+#
+# Random - Each connection will be done via random proxy
+# (or proxy chain, see  chain_len) from the list.
+# this option is good to test your IDS :)
 
-if len(sys.argv) != 5 and len(sys.argv) != 3:
-    print("Wrong command, sample commands: \n python setproxy.py 202.141.80.19 3128 username password \n OR \n python setproxy.py 202.141.80.19 3128")
+# Make sense only if random_chain
+#chain_len = 2
 
-else:
-    proxy = sys.argv[1]
-    port = sys.argv[2]
-    os.system('sudo touch /etc/apt/apt.conf')
-    if len(sys.argv) == 5:
-        username = sys.argv[3]
-        password = sys.argv[4]
-        mark = 0
-        for line in fileinput.input("/etc/environment", inplace=1):
-            if "proxy" in line:
-                mark = 1
-                line = re.sub(r'(.*)_proxy=(.*)', r'\1_proxy="\1://'+username+':'+password+'@'+proxy+':'+port+"/\"\n", line.rstrip())
-            sys.stdout.write(line)
+# Quiet mode (no output from library)
+#quiet_mode
 
-        if mark == 0:
-            file1 = open("/etc/environment", "w")
-            file1.write("PATH=\"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games\"\n")
-            file1.write("http_proxy=\"http://"+username+":"+password+"@"+proxy+":"+port+"/\"\n")
-            file1.write("https_proxy=\"https://"+username+":"+password+"@"+proxy+":"+port+"/\"\n")
-            file1.write("ftp_proxy=\"ftp://"+username+":"+password+"@"+proxy+":"+port+"/\"\n")
-            file1.write("socks_proxy=\"socks://"+username+":"+password+"@"+proxy+":"+port+"/\"\n")
-            file1.close()
+# Proxy DNS requests - no leak for DNS data
+proxy_dns 
 
-        mark = 0
-        for line in fileinput.input("/etc/apt/apt.conf", inplace=1):
-            if "Acquire::" in line and "Cache" not in line:
-                mark = 1
-                line = re.sub(r'Acquire::(.*)::proxy (.*)', r'Acquire::\1::proxy "\1://'+username+":"+password+"@"+proxy+":"+port+"/\";\n", line.rstrip())
-            sys.stdout.write(line)
+# set the class A subnet number to usefor use of the internal remote DNS mapping
+# we use the reserved 224.x.x.x range by default,
+# if the proxified app does a DNS request, we will return an IP from that range.
+# on further accesses to this ip we will send the saved DNS name to the proxy.
+# in case some control-freak app checks the returned ip, and denies to 
+# connect, you can use another subnet, e.g. 10.x.x.x or 127.x.x.x.
+# of course you should make sure that the proxified app does not need
+# *real* access to this subnet. 
+# i.e. dont use the same subnet then in the localnet section
+#remote_dns_subnet 127 
+#remote_dns_subnet 10
+remote_dns_subnet 224
 
-        if mark == 0:
-            file1 = open("/etc/apt/apt.conf", "w")
-            file1.write("Acquire::http::proxy \"http://"+username+":"+password+"@"+proxy+":"+port+"/\";\n")
-            file1.write("Acquire::https::proxy \"https://"+username+":"+password+"@"+proxy+":"+port+"/\";\n")
-            file1.write("Acquire::ftp::proxy \"ftp://"+username+":"+password+"@"+proxy+":"+port+"/\";\n")
-            file1.write("Acquire::http::No-Cache \"True\";\n")
-            file1.write("Acquire::socks::proxy \"socks://"+username+":"+password+"@"+proxy+":"+port+"/\";\n")
-            file1.close()
+# Some timeouts in milliseconds
+tcp_read_time_out 15000
+tcp_connect_time_out 8000
 
-        mark = 0
-        for line in fileinput.input("/etc/bash.bashrc", inplace=1):
-            if "export" in line:
-                mark = 1
-                line = re.sub(r'export (.*)_proxy=(.*)', r'export \1_proxy=\1://'+username+':'+password+'@'+proxy+':'+port+'\n', line.rstrip())
-            sys.stdout.write(line)
-
-        if mark == 0:
-            file1 = open("/etc/bash.bashrc", "a")
-            file1.write("\n\nexport http_proxy=http://"+username+":"+password+"@"+proxy+":"+port+"\n")
-            file1.write("export https_proxy=https://"+username+":"+password+"@"+proxy+":"+port+"\n")
-            file1.write("export ftp_proxy=ftp://"+username+":"+password+"@"+proxy+":"+port+"\n")
-            file1.close()
-
-
-        mark = 0
-        for line in fileinput.input("/etc/wgetrc", inplace=1):
-            if not line.startswith("#") and "proxy" in line:
-                mark = 1
-                line = re.sub(r'(.*)_proxy=(.*)//(.*)', r'\1_proxy=\1://'+username+':'+password+'@'+proxy+':'+port+'\n', line.rstrip())
-            sys.stdout.write(line)
-
-        if mark == 0:
-            file1 = open("/etc/wgetrc", "a")
-            file1.write("\n\nhttp_proxy=http://"+username+":"+password+"@"+proxy+":"+port+"\n")
-            file1.write("https_proxy=https://"+username+":"+password+"@"+proxy+":"+port+"\n")
-            file1.write("ftp_proxy=ftp://"+username+":"+password+"@"+proxy+":"+port+"\n")
-            file1.close()
-
-    else:
-        mark = 0
-        for line in fileinput.input("/etc/environment", inplace=1):
-            if "proxy" in line:
-                mark = 1
-                line = re.sub(r'(.*)_proxy=(.*)', r'\1_proxy="\1://'+proxy+':'+port+"/\"\n", line.rstrip())
-            sys.stdout.write(line)
-
-        if mark == 0:
-            file1 = open("/etc/environment", "w")
-            file1.write("PATH=\"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games\"\n")
-            file1.write("http_proxy=\"http://"+proxy+":"+port+"/\"\n")
-            file1.write("https_proxy=\"https://"+proxy+":"+port+"/\"\n")
-            file1.write("ftp_proxy=\"ftp://"+proxy+":"+port+"/\"\n")
-            file1.write("socks_proxy=\"socks://"+proxy+":"+port+"/\"\n")
-            file1.close()
-
-        mark = 0
-        for line in fileinput.input("/etc/apt/apt.conf", inplace=1):
-            if "Acquire::" in line and "Cache" not in line:
-                mark = 1
-                line = re.sub(r'Acquire::(.*)::proxy (.*)', r'Acquire::\1::proxy "\1://'+proxy+":"+port+"/\";\n", line.rstrip())
-            sys.stdout.write(line)
-
-        if mark == 0:
-            file1 = open("/etc/apt/apt.conf", "w")
-            file1.write("Acquire::http::proxy \"http://"+proxy+":"+port+"/\";\n")
-            file1.write("Acquire::https::proxy \"https://"+proxy+":"+port+"/\";\n")
-            file1.write("Acquire::ftp::proxy \"ftp://"+proxy+":"+port+"/\";\n")
-            file1.write("Acquire::http::No-Cache \"True\";\n")
-            file1.write("Acquire::socks::proxy \"socks://"+proxy+":"+port+"/\";\n")
-            file1.close()
-
-        mark = 0
-        for line in fileinput.input("/etc/bash.bashrc", inplace=1):
-            if "export" in line:
-                mark = 1
-                line = re.sub(r'export (.*)_proxy=(.*)', r'export \1_proxy=\1://'+proxy+':'+port+'\n', line.rstrip())
-            sys.stdout.write(line)
-
-        if mark == 0:
-            file1 = open("/etc/bash.bashrc", "a")
-            file1.write("\n\nexport http_proxy=http://"+proxy+":"+port+"\n")
-            file1.write("export https_proxy=https://"+proxy+":"+port+"\n")
-            file1.write("export ftp_proxy=ftp://"+proxy+":"+port+"\n")
-            file1.close()
+# By default enable localnet for loopback address ranges
+# RFC5735 Loopback address range
+localnet 127.0.0.0/255.0.0.0
+# RFC1918 Private Address Ranges
+# localnet 10.0.0.0/255.0.0.0
+# localnet 172.16.0.0/255.240.0.0
+# localnet 192.168.0.0/255.255.0.0
 
 
-        mark = 0
-        for line in fileinput.input("/etc/wgetrc", inplace=1):
-            if not line.startswith("#") and "proxy" in line:
-                mark = 1
-                line = re.sub(r'(.*)_proxy=(.*)//(.*)', r'\1_proxy=\1://'+proxy+':'+port+'\n', line.rstrip())
-            sys.stdout.write(line)
+# Example for localnet exclusion
+## Exclude connections to 192.168.1.0/24 with port 80
+# localnet 192.168.1.0:80/255.255.255.0
 
-        if mark == 0:
-            file1 = open("/etc/wgetrc", "a")
-            file1.write("\n\nhttp_proxy=http://"+proxy+":"+port+"\n")
-            file1.write("https_proxy=https://"+proxy+":"+port+"\n")
-            file1.write("ftp_proxy=ftp://"+proxy+":"+port+"\n")
+## Exclude connections to 192.168.100.0/24
+# localnet 192.168.100.0/255.255.255.0
+
+## Exclude connections to ANYwhere with port 80
+# localnet 0.0.0.0:80/0.0.0.0
+
+
+### Examples for dnat
+## Trying to proxy connections to destinations which are dnatted,
+## will result in proxying connections to the new given destinations.
+## Whenever I connect to 1.1.1.1 on port 1234 actually connect to 1.1.1.2 on port 443
+# dnat 1.1.1.1:1234  1.1.1.2:443
+
+## Whenever I connect to 1.1.1.1 on port 443 actually connect to 1.1.1.2 on port 443
+## (no need to write :443 again)
+# dnat 1.1.1.2:443  1.1.1.2
+
+## No matter what port I connect to on 1.1.1.1 port actually connect to 1.1.1.2 on port 443
+# dnat 1.1.1.1  1.1.1.2:443
+
+## Always, instead of connecting to 1.1.1.1, connect to 1.1.1.2
+# dnat 1.1.1.1  1.1.1.2
+
+
+# ProxyList format
+#       type  host  port [user pass]
+#       (values separated by 'tab' or 'blank')
+#
+#
+#        Examples:
+#
+#            	socks5	192.168.67.78	1080	lamer	secret
+#		http	192.168.89.3	8080	justu	hidden
+#	 	socks4	192.168.1.49	1080
+#	        http	192.168.39.93	8080	
+#		
+#
+#       proxy types: http, socks4, socks5
+#        ( auth types supported: "basic"-http  "user/pass"-socks )
+#
+[ProxyList]
+# add proxy here ...
+# meanwhile
+# defaults set to "tor"
+socks5 	104.227.94.65 1080 hzlfpwka-dest hd1m3388cwor
